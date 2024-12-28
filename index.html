@@ -184,8 +184,8 @@
 
     <script>
         let ingredients = [];
-        const APP_ID = '95c32bd0'; // Replace with your Edamam API credentials
-        const APP_KEY = '6f4f3cbb7d0cb137b58a4432783b2343';
+        const APP_ID = 'YOUR_APP_ID'; // Replace with your Edamam API credentials
+        const APP_KEY = 'YOUR_APP_KEY';
 
         document.getElementById('ingredientInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -251,7 +251,7 @@
                     const recipe = hit.recipe;
                     return `
                         <div class="recipe-card">
-                            <img src="/api/placeholder/400/200" alt="${recipe.label}" class="recipe-image">
+                            <img src="${recipe.image}" alt="${recipe.label}" class="recipe-image" onerror="this.src='/api/placeholder/400/200'">
                             <div class="recipe-content">
                                 <div class="recipe-title">${recipe.label}</div>
                                 <div class="recipe-meta">
