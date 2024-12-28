@@ -146,19 +146,12 @@
             margin: 20px 0;
         }
 
-        .tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
+        .recipe-instructions {
             margin-top: 10px;
-        }
-
-        .tag {
-            background-color: #e7f3ff;
-            color: #0066cc;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            font-size: 14px;
+            max-height: 100px;
+            overflow-y: auto;
+            padding-right: 10px;
         }
     </style>
 </head>
@@ -184,8 +177,6 @@
 
     <script>
         let ingredients = [];
-        const APP_ID = '95c32bd0'; // Replace with your Edamam API credentials
-        const APP_KEY = '6f4f3cbb7d0cb137b58a4432783b2343';
 
         document.getElementById('ingredientInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -236,53 +227,84 @@
             recipesContainer.innerHTML = '';
 
             try {
-                const query = ingredients.join(',');
-                const response = await fetch(
-                    `https://api.edamam.com/api/recipes/v2?type=public&q=${query}&app_id=${APP_ID}&app_key=${APP_KEY}`
-                );
+                // Search for each ingredient separately and combine results
+                const allRecipes = [];
+                
+                for (const ingredient of ingredients) {
+                    const response = await fetch(
+                        `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredient)}`
+                    );
 
-                if (!response.ok) {
-                    throw new Error('Failed to fetch recipes');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch recipes');
+                    }
+
+                    const data = await response.json();
+                    if (data.meals) {
+                        allRecipes.push(...data.meals);
+                    }
                 }
 
-                const data = await response.json();
-                
-                recipesContainer.innerHTML = data.hits.map(hit => {
-                    const recipe = hit.recipe;
+                // Remove duplicates based on meal ID
+                const uniqueRecipes = Array.from(new Set(allRecipes.map(r => r.idMeal)))
+                    .map(id => allRecipes.find(r => r.idMeal === id));
+
+                // Get full details for each recipe
+                const recipeDetails = await Promise.all(
+                    uniqueRecipes.slice(0, 10).map(async recipe => {
+                        const response = await fetch(
+                            `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${recipe.idMeal}`
+                        );
+                        const data = await response.json();
+                        return data.meals[0];
+                    })
+                );
+
+                recipesContainer.innerHTML = recipeDetails.map(recipe => {
+                    // Get all ingredients and measures
+                    const ingredients = [];
+                    for (let i = 1; i <= 20; i++) {
+                        const ingredient = recipe[`strIngredient${i}`];
+                        const measure = recipe[`strMeasure${i}`];
+                        if (ingredient && ingredient.trim()) {
+                            ingredients.push(`${measure ? measure.trim() + ' ' : ''}${ingredient.trim()}`);
+                        }
+                    }
+
                     return `
                         <div class="recipe-card">
-                            <img src="${recipe.image}" alt="${recipe.label}" class="recipe-image" onerror="this.src='/api/placeholder/400/200'">
+                            <img src="${recipe.strMealThumb}" alt="${recipe.strMeal}" class="recipe-image">
                             <div class="recipe-content">
-                                <div class="recipe-title">${recipe.label}</div>
+                                <div class="recipe-title">${recipe.strMeal}</div>
                                 <div class="recipe-meta">
-                                    ${recipe.source} • ${Math.round(recipe.calories)} cal • ${recipe.yield} servings
-                                </div>
-                                <div class="tags">
-                                    ${recipe.dietLabels.map(label => `
-                                        <span class="tag">${label}</span>
-                                    `).join('')}
-                                    ${recipe.healthLabels.slice(0, 3).map(label => `
-                                        <span class="tag">${label}</span>
-                                    `).join('')}
+                                    ${recipe.strArea} • ${recipe.strCategory}
                                 </div>
                                 <div class="recipe-ingredients">
                                     <strong>Ingredients:</strong>
                                     <ul>
-                                        ${recipe.ingredientLines.slice(0, 4).map(ingredient => `
+                                        ${ingredients.slice(0, 4).map(ingredient => `
                                             <li>${ingredient}</li>
                                         `).join('')}
-                                        ${recipe.ingredientLines.length > 4 ? 
-                                            `<li>+${recipe.ingredientLines.length - 4} more ingredients</li>` : 
+                                        ${ingredients.length > 4 ? 
+                                            `<li>+${ingredients.length - 4} more ingredients</li>` : 
                                             ''}
                                     </ul>
                                 </div>
-                                <a href="${recipe.url}" target="_blank" class="recipe-link">
-                                    View Full Recipe →
-                                </a>
+                                <div class="recipe-instructions">
+                                    <strong>Instructions:</strong>
+                                    <p>${recipe.strInstructions.split('.').slice(0, 2).join('.')}...</p>
+                                </div>
+                                <button onclick="window.open('${recipe.strYoutube}', '_blank')" class="recipe-link">
+                                    Watch Recipe Video →
+                                </button>
                             </div>
                         </div>
                     `;
                 }).join('');
+
+                if (recipeDetails.length === 0) {
+                    recipesContainer.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No recipes found with these ingredients. Try different ingredients!</p>';
+                }
 
             } catch (error) {
                 errorDiv.innerHTML = 'Error fetching recipes. Please try again later.';
