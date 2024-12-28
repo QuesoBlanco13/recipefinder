@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Finder</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .ingredients-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .ingredient-tag {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .remove-ingredient {
+            background: none;
+            border: none;
+            color: #dc3545;
+            padding: 0 5px;
+            cursor: pointer;
+        }
+
+        .recipes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .recipe-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .recipe-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .recipe-content {
+            padding: 15px;
+        }
+
+        .recipe-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .recipe-meta {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .recipe-ingredients {
+            margin-top: 10px;
+        }
+
+        .recipe-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .recipe-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .error {
+            color: #dc3545;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .tag {
+            background-color: #e7f3ff;
+            color: #0066cc;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Recipe Finder</h1>
+        
+        <div class="input-container">
+            <input type="text" id="ingredientInput" placeholder="Enter an ingredient" autofocus>
+            <button onclick="addIngredient()">Add</button>
+        </div>
+
+        <div id="ingredientsList" class="ingredients-list"></div>
+        
+        <div id="error" class="error"></div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            Finding recipes...
+        </div>
+
+        <div id="recipesContainer" class="recipes-grid"></div>
+    </div>
+
+    <script>
+        let ingredients = [];
+        const APP_ID = '95c32bd0'; // Replace with your Edamam API credentials
+        const APP_KEY = '6f4f3cbb7d0cb137b58a4432783b2343';
+
+        document.getElementById('ingredientInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addIngredient();
+            }
+        });
+
+        function addIngredient() {
+            const input = document.getElementById('ingredientInput');
+            const ingredient = input.value.trim().toLowerCase();
+            
+            if (ingredient && !ingredients.includes(ingredient)) {
+                ingredients.push(ingredient);
+                input.value = '';
+                updateIngredientsList();
+                findRecipes();
+            }
+        }
+
+        function removeIngredient(index) {
+            ingredients.splice(index, 1);
+            updateIngredientsList();
+            findRecipes();
+        }
+
+        function updateIngredientsList() {
+            const list = document.getElementById('ingredientsList');
+            list.innerHTML = ingredients.map((ingredient, index) => `
+                <div class="ingredient-tag">
+                    ${ingredient}
+                    <button class="remove-ingredient" onclick="removeIngredient(${index})">×</button>
+                </div>
+            `).join('');
+        }
+
+        async function findRecipes() {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const recipesContainer = document.getElementById('recipesContainer');
+
+            if (ingredients.length === 0) {
+                recipesContainer.innerHTML = '';
+                return;
+            }
+
+            loadingDiv.style.display = 'block';
+            errorDiv.innerHTML = '';
+            recipesContainer.innerHTML = '';
+
+            try {
+                const query = ingredients.join(',');
+                const response = await fetch(
+                    `https://api.edamam.com/api/recipes/v2?type=public&q=${query}&app_id=${APP_ID}&app_key=${APP_KEY}`
+                );
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch recipes');
+                }
+
+                const data = await response.json();
+                
+                recipesContainer.innerHTML = data.hits.map(hit => {
+                    const recipe = hit.recipe;
+                    return `
+                        <div class="recipe-card">
+                            <img src="/api/placeholder/400/200" alt="${recipe.label}" class="recipe-image">
+                            <div class="recipe-content">
+                                <div class="recipe-title">${recipe.label}</div>
+                                <div class="recipe-meta">
+                                    ${recipe.source} • ${Math.round(recipe.calories)} cal • ${recipe.yield} servings
+                                </div>
+                                <div class="tags">
+                                    ${recipe.dietLabels.map(label => `
+                                        <span class="tag">${label}</span>
+                                    `).join('')}
+                                    ${recipe.healthLabels.slice(0, 3).map(label => `
+                                        <span class="tag">${label}</span>
+                                    `).join('')}
+                                </div>
+                                <div class="recipe-ingredients">
+                                    <strong>Ingredients:</strong>
+                                    <ul>
+                                        ${recipe.ingredientLines.slice(0, 4).map(ingredient => `
+                                            <li>${ingredient}</li>
+                                        `).join('')}
+                                        ${recipe.ingredientLines.length > 4 ? 
+                                            `<li>+${recipe.ingredientLines.length - 4} more ingredients</li>` : 
+                                            ''}
+                                    </ul>
+                                </div>
+                                <a href="${recipe.url}" target="_blank" class="recipe-link">
+                                    View Full Recipe →
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                errorDiv.innerHTML = 'Error fetching recipes. Please try again later.';
+                console.error('Recipe fetch error:', error);
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
